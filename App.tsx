@@ -242,6 +242,7 @@ const App: React.FC = () => {
   const [isTemporaryMode, setIsTemporaryMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -411,6 +412,7 @@ const App: React.FC = () => {
         const hfRecognition = await analyzeImageHF(base64);
         
         const aiMsgId = (Date.now() + 1).toString();
+        setStreamingMsgId(aiMsgId);
         // Always show Analyzing immediately
         setMessages(prev => [...prev, {
           id: aiMsgId,
@@ -452,6 +454,7 @@ const App: React.FC = () => {
       } catch (err) {
         console.error("Analysis Error:", err);
       } finally {
+        setStreamingMsgId(null);
         setIsLoading(false);
         setIsAnalyzingImage(false);
         // Clear the image preview after analysis is complete.
@@ -535,6 +538,7 @@ const App: React.FC = () => {
     };
 
     setMessages(prev => [...prev, aiMsgPlaceholder]);
+    setStreamingMsgId(aiMsgId);
     setIsLoading(true);
 
     try {
@@ -566,7 +570,8 @@ const App: React.FC = () => {
         selectedLanguage
       );
 
-      // Force final update to ensure no chunk was skipped
+      // Force final update and switch to markdown rendering
+      setStreamingMsgId(null);
       setMessages(prev => prev.map(m =>
         m.id === aiMsgId ? { ...m, text: fullResponse } : m
       ));
@@ -1017,6 +1022,9 @@ const App: React.FC = () => {
                         )}
                         {msg.sender === Sender.USER ? (
                           <p className="whitespace-pre-wrap leading-relaxed text-sm md:text-base">{msg.text}</p>
+                        ) : streamingMsgId === msg.id ? (
+                          /* During streaming: render as smooth plain text to avoid ReactMarkdown re-parse jank */
+                          <p className="whitespace-pre-wrap leading-relaxed text-sm md:text-base text-gray-100 transition-none">{msg.text}<span className="inline-block w-1.5 h-4 ml-0.5 bg-purple-400 rounded-sm animate-pulse align-middle" /></p>
                         ) : (
                           <div className="prose prose-invert prose-sm md:prose-base max-w-none 
                                      prose-p:leading-relaxed prose-pre:bg-black/30 prose-pre:p-4 prose-pre:rounded-xl
