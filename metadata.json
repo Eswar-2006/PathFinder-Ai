@@ -1,0 +1,8 @@
+{
+  "name": "PathFinder AI",
+  "description": "A glassmorphic educational chatbot designed to guide students toward high-paying careers in Emerging Technologies like AI, Robotics, and Blockchain.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
