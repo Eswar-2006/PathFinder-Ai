@@ -418,7 +418,7 @@ const App: React.FC = () => {
         }]);
 
         if (hfRecognition) {
-          const prompt = `I just uploaded an image, and a computer vision model described it as: "${hfRecognition}". \n\nFirst, determine if this description is structurally relevant to career planning, education, academics, documents (like certificates or report cards), or professional skills. \nIf it IS relevant, tell me what you see based on the description and ask: 'What would you like me to do with this image?'. \nIf it is NOT relevant, briefly state what the description said and ask me to upload a relevant career-related image or simply ask my career question.`;
+          const prompt = `I just uploaded an image, and a computer vision model described it as: "${hfRecognition}". \n\nFirst, determine if this description is structurally relevant to career planning, education, academics, documents (like certificates, report cards, mark sheets, resumes), or professional skills. \nIf it IS relevant, tell me what you see based on the description and provide specific career/education suggestions and guidance based on the content. Ask: 'What would you like me to do with this image?'. \nIf it is NOT relevant at all to career or education, respond EXACTLY like this: "📋 I couldn't find any career or education-related content in this image. Here's what I can help with instead:\n\n🎯 **Take the Career Quiz** — Answer a few quick questions and I'll chart your ideal path.\n✍️ **Tell me manually** — Share your current education level, interests, and goals and I'll guide you.\n📷 **Upload a relevant document** — Try uploading a report card, certificate, resume, or any academic document.\n\nHow would you like to proceed?"`;
           
           let fullResponse = "";
           await getGeminiStream(
@@ -433,7 +433,7 @@ const App: React.FC = () => {
           );
         } else {
           // If HF totally fails, fallback to Gemini Vision API
-          const autoPrompt = "Analyze this image. First, determine if it is relevant to career planning, education, academics, documents, or professional skills. If it IS relevant, tell me what you see and ask: 'What would you like me to do with this image?'. If it is NOT relevant, briefly state what you see and ask the user to upload a relevant career-related image or simply ask their career question.";
+          const autoPrompt = "Analyze this image. First, determine if it is relevant to career planning, education, academics, documents (like certificates, report cards, mark sheets, resumes), or professional skills. If it IS relevant, tell me what you see and provide specific career/education suggestions and guidance based on the content. Ask: 'What would you like me to do with this image?'. If it is NOT relevant at all to career or education, respond EXACTLY like this: '📋 I couldn\'t find any career or education-related content in this image. Here\'s what I can help with instead:\n\n🎯 **Take the Career Quiz** — Answer a few quick questions and I\'ll chart your ideal path.\n✍️ **Tell me manually** — Share your current education level, interests, and goals and I\'ll guide you.\n📷 **Upload a relevant document** — Try uploading a report card, certificate, resume, or any academic document.\n\nHow would you like to proceed?'";
           
           let fullResponse = "";
           await getGeminiStream(
