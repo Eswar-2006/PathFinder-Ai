@@ -241,6 +241,7 @@ const App: React.FC = () => {
 
   const [isTemporaryMode, setIsTemporaryMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -403,6 +404,7 @@ const App: React.FC = () => {
       };
       setMessages(prev => [...prev, userMsg]);
       setIsLoading(true);
+      setIsAnalyzingImage(true);
 
       try {
         // Use Hugging Face for initial quick recognition (if configured)
@@ -451,6 +453,11 @@ const App: React.FC = () => {
         console.error("Analysis Error:", err);
       } finally {
         setIsLoading(false);
+        setIsAnalyzingImage(false);
+        // Clear the image preview after analysis is complete.
+        // The image has already been analyzed and the AI response is in the chat history.
+        // Follow-up messages should be pure text conversations referencing the prior context.
+        setImagePreview(null);
       }
     };
     reader.readAsDataURL(file);
@@ -458,7 +465,11 @@ const App: React.FC = () => {
 
   const handleSendMessage = async (textToUse: string = inputText) => {
     const finalPrompt = textToUse.trim();
-    if (!finalPrompt && !imagePreview) return;
+    if (!finalPrompt) return;
+
+    // Capture and immediately clear any pending image so it's used only once
+    const pendingImage = imagePreview;
+    setImagePreview(null);
 
     // Inject NIRF Context just for the API call (hidden from UI)
     const promptWithContext = `
@@ -534,7 +545,8 @@ const App: React.FC = () => {
 
       // Optimizing React Rendering During Stream
       let fullResponse = "";
-      let renderTimeout: number | null = null;
+      let lastRenderTime = 0;
+      const RENDER_INTERVAL = 80; // ms between React state updates
 
       await getGeminiStream(
         finalPrompt,
@@ -542,16 +554,15 @@ const App: React.FC = () => {
         (chunk) => {
           fullResponse += chunk;
 
-          // Debounce/Throttle React state updates to prevent layout thrashing
-          if (renderTimeout) return;
-          renderTimeout = window.requestAnimationFrame(() => {
-            setMessages(prev => prev.map(m =>
-              m.id === aiMsgId ? { ...m, text: fullResponse } : m
-            ));
-            renderTimeout = null;
-          });
+          // Throttle React state updates to prevent layout thrashing
+          const now = Date.now();
+          if (now - lastRenderTime < RENDER_INTERVAL) return;
+          lastRenderTime = now;
+          setMessages(prev => prev.map(m =>
+            m.id === aiMsgId ? { ...m, text: fullResponse } : m
+          ));
         },
-        imagePreview || undefined,
+        pendingImage || undefined,
         selectedLanguage
       );
 
@@ -573,7 +584,7 @@ const App: React.FC = () => {
         });
       }
 
-      setImagePreview(null);
+      // imagePreview already cleared at the top of handleSendMessage
     } catch (error) {
       console.error(error);
     } finally {
@@ -1047,13 +1058,31 @@ const App: React.FC = () => {
                   {isLoading && (
                     <div className="flex justify-start">
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="p-4 glass-dark rounded-2xl flex gap-1 items-center"
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                        className="px-5 py-4 glass-dark rounded-2xl border border-white/10 flex items-center gap-3 shadow-lg shadow-purple-900/10"
                       >
-                        <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"></div>
-                        <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-75"></div>
-                        <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-150"></div>
+                        {isAnalyzingImage ? (
+                          <>
+                            <div className="relative w-8 h-8 flex items-center justify-center">
+                              <div className="absolute inset-0 rounded-full border-2 border-purple-500/30 border-t-purple-400 animate-spin"></div>
+                              <Camera size={14} className="text-purple-300" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-white/80">Analyzing image...</span>
+                              <span className="text-xs text-white/40">Extracting text & context with AI Vision</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="relative w-8 h-8 flex items-center justify-center">
+                              <div className="absolute inset-0 rounded-full border-2 border-blue-500/30 border-t-blue-400 animate-spin"></div>
+                              <Bot size={14} className="text-blue-300" />
+                            </div>
+                            <span className="text-sm font-medium text-white/70">PathFinder is thinking...</span>
+                          </>
+                        )}
                       </motion.div>
                     </div>
                   )}
