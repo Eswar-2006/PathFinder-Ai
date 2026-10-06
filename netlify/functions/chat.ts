@@ -104,42 +104,50 @@ export const handler = stream(async (event) => {
             { role: "user", content: prompt }
         ];
 
-        const GROQ_MODELS = [
-            'llama-3.1-8b-instant',
-            'llama-3.3-70b-versatile',
-            'llama3-70b-8192',
-            'llama3-8b-8192',
-            'mixtral-8x7b-32768'
-        ];
-
-        let completion: any = null;
-        let lastError: any = null;
-
-        for (const model of GROQ_MODELS) {
-            try {
-                if (isStream) {
-                    completion = await groq.chat.completions.create({
-                        messages: messages as any,
-                        model: model,
-                        temperature: 0.7,
-                        stream: true,
-                    });
-                } else {
-                    completion = await groq.chat.completions.create({
-                        messages: messages as any,
-                        model: model,
-                        temperature: 0.7,
-                    });
-                }
-                if (completion) break;
-            } catch (err: any) {
-                lastError = err;
-                console.warn(`Groq model ${model} failed, trying next...`, err.message);
+        let targetModel = 'llama-3.1-8b-instant';
+        try {
+            const list = await groq.models.list();
+            const activeModels = (list.data || []).map((m: any) => m.id);
+            const preferred = activeModels.find((id: string) => 
+                !id.includes('whisper') && !id.includes('guard') && (
+                    id.includes('llama-3.3-70b') ||
+                    id.includes('llama-3.1-70b') ||
+                    id.includes('llama-3.1-8b') ||
+                    id.includes('llama3') ||
+                    id.includes('qwen') ||
+                    id.includes('gemma') ||
+                    id.includes('deepseek')
+                )
+            );
+            if (preferred) {
+                targetModel = preferred;
+            } else if (activeModels.length > 0) {
+                const textModel = activeModels.find((id: string) => !id.includes('whisper') && !id.includes('guard'));
+                if (textModel) targetModel = textModel;
             }
+        } catch (e) {
+            console.warn("Could not query Groq models dynamically:", e);
         }
 
-        if (!completion) {
-            return new Response(JSON.stringify({ error: lastError?.message || "All Groq models failed" }), {
+        let completion: any = null;
+        try {
+            if (isStream) {
+                completion = await groq.chat.completions.create({
+                    messages: messages as any,
+                    model: targetModel,
+                    temperature: 0.7,
+                    stream: true,
+                });
+            } else {
+                completion = await groq.chat.completions.create({
+                    messages: messages as any,
+                    model: targetModel,
+                    temperature: 0.7,
+                });
+            }
+        } catch (err: any) {
+            console.error("Groq chat error with model", targetModel, err);
+            return new Response(JSON.stringify({ error: err.message || "Groq generation failed" }), {
                 status: 500,
                 headers: { "Content-Type": "application/json", ...corsHeaders }
             });
