@@ -51,15 +51,28 @@ Operational Guidelines:
 `;
 
 export const handler = stream(async (event) => {
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+    };
+
+    if (event.httpMethod === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
     if (event.httpMethod !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
+        return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
     }
 
     const { prompt, history, imageData, language, isStream } = JSON.parse(event.body || "{}");
-    const apiKey = process.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
     if (!apiKey) {
-        return new Response("Configuration Error: API Key is missing.", { status: 500 });
+        return new Response("Configuration Error: API Key is missing. Please set GEMINI_API_KEY or GROQ_API_KEY in Netlify Environment Variables.", { 
+            status: 500, 
+            headers: corsHeaders 
+        });
     }
 
     const isGroq = apiKey.startsWith('gsk_');
@@ -67,7 +80,7 @@ export const handler = stream(async (event) => {
     let languageInstruction = "";
     if (language === 'Hinglish') {
         languageInstruction = "\n\nIMPORTANT: Respond in Hinglish (Hindi written in English script), casual and conversational like a mentor speaking to an Indian student.";
-    } else if (language !== 'English') {
+    } else if (language && language !== 'English') {
         languageInstruction = `\n\nIMPORTANT: Respond in ${language}. Answer formally and accurately in the ${language} script (if applicable).`;
     } else {
         languageInstruction = "\n\nIMPORTANT: Respond in professional English.";
@@ -114,7 +127,7 @@ export const handler = stream(async (event) => {
             });
 
             return new Response(readableStream, {
-                headers: { "Content-Type": "text/event-stream" }
+                headers: { "Content-Type": "text/event-stream", ...corsHeaders }
             });
         } else {
             const completion = await groq.chat.completions.create({
@@ -123,7 +136,7 @@ export const handler = stream(async (event) => {
                 temperature: 0.7,
             });
             return new Response(JSON.stringify({ text: completion.choices[0]?.message?.content || "No response" }), {
-                headers: { "Content-Type": "application/json" }
+                headers: { "Content-Type": "application/json", ...corsHeaders }
             });
         }
 
@@ -162,13 +175,13 @@ export const handler = stream(async (event) => {
             });
 
             return new Response(readableStream, {
-                headers: { "Content-Type": "text/event-stream" }
+                headers: { "Content-Type": "text/event-stream", ...corsHeaders }
             });
         } else {
             const result = await model.generateContent({ contents });
             const response = await result.response;
             return new Response(JSON.stringify({ text: response.text() }), {
-                headers: { "Content-Type": "application/json" }
+                headers: { "Content-Type": "application/json", ...corsHeaders }
             });
         }
     }

@@ -1,15 +1,26 @@
 import { HfInference } from "@huggingface/inference";
 
 export const handler = async (event: any) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Content-Type": "application/json"
+    };
+
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 204, headers, body: "" };
+    }
+
     if (event.httpMethod !== "POST") {
-        return { statusCode: 405, body: "Method Not Allowed" };
+        return { statusCode: 405, headers, body: JSON.stringify({ error: "Method Not Allowed" }) };
     }
 
     const { base64Image } = JSON.parse(event.body || "{}");
-    const apiKey = process.env.VITE_HF_TOKEN;
+    const apiKey = process.env.HF_TOKEN || process.env.VITE_HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
 
     if (!apiKey) {
-        return { statusCode: 500, body: JSON.stringify({ error: "Hugging Face API Key is missing." }) };
+        return { statusCode: 500, headers, body: JSON.stringify({ error: "Hugging Face API Key is missing." }) };
     }
 
     try {
@@ -36,12 +47,14 @@ export const handler = async (event: any) => {
         
         return {
             statusCode: 200,
+            headers,
             body: JSON.stringify({ text })
         };
     } catch (error: any) {
         console.error("Hugging Face Error:", error);
         return {
             statusCode: 500,
+            headers,
             body: JSON.stringify({ error: error.message || "Failed to analyze image" })
         };
     }
