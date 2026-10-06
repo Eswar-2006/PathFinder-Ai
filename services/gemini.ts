@@ -79,18 +79,42 @@ const directClientStream = async (
             { role: "user", content: prompt }
         ];
 
-        const completion = await groq.chat.completions.create({
-            messages: messages as any,
-            model: 'llama-3.3-70b-versatile',
-            temperature: 0.7,
-            stream: true,
-        });
+        const GROQ_MODELS = [
+            'llama-3.1-8b-instant',
+            'llama-3.3-70b-versatile',
+            'llama3-70b-8192',
+            'llama3-8b-8192',
+            'mixtral-8x7b-32768'
+        ];
 
-        for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) {
-                onChunk(content);
+        let streamSuccess = false;
+        let lastError: any = null;
+
+        for (const model of GROQ_MODELS) {
+            try {
+                const completion = await groq.chat.completions.create({
+                    messages: messages as any,
+                    model: model,
+                    temperature: 0.7,
+                    stream: true,
+                });
+
+                for await (const chunk of completion) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) {
+                        onChunk(content);
+                        streamSuccess = true;
+                    }
+                }
+                if (streamSuccess) break;
+            } catch (err: any) {
+                lastError = err;
+                console.warn(`Groq model ${model} failed, trying next...`, err.message);
             }
+        }
+
+        if (!streamSuccess && lastError) {
+            throw lastError;
         }
     } else {
         const genAI = new GoogleGenerativeAI(apiKey);

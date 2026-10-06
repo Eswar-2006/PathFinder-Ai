@@ -104,25 +104,62 @@ export const handler = stream(async (event) => {
             { role: "user", content: prompt }
         ];
 
-        const modelName = 'llama-3.3-70b-versatile';
+        const GROQ_MODELS = [
+            'llama-3.1-8b-instant',
+            'llama-3.3-70b-versatile',
+            'llama3-70b-8192',
+            'llama3-8b-8192',
+            'mixtral-8x7b-32768'
+        ];
+
+        let completion: any = null;
+        let lastError: any = null;
+
+        for (const model of GROQ_MODELS) {
+            try {
+                if (isStream) {
+                    completion = await groq.chat.completions.create({
+                        messages: messages as any,
+                        model: model,
+                        temperature: 0.7,
+                        stream: true,
+                    });
+                } else {
+                    completion = await groq.chat.completions.create({
+                        messages: messages as any,
+                        model: model,
+                        temperature: 0.7,
+                    });
+                }
+                if (completion) break;
+            } catch (err: any) {
+                lastError = err;
+                console.warn(`Groq model ${model} failed, trying next...`, err.message);
+            }
+        }
+
+        if (!completion) {
+            return new Response(JSON.stringify({ error: lastError?.message || "All Groq models failed" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json", ...corsHeaders }
+            });
+        }
 
         if (isStream) {
-            const completion = await groq.chat.completions.create({
-                messages: messages as any,
-                model: modelName,
-                temperature: 0.7,
-                stream: true,
-            });
-
             const readableStream = new ReadableStream({
                 async start(controller) {
-                    for await (const chunk of completion) {
-                        const content = chunk.choices[0]?.delta?.content || "";
-                        if (content) {
-                            controller.enqueue(new TextEncoder().encode(content));
+                    try {
+                        for await (const chunk of completion) {
+                            const content = chunk.choices[0]?.delta?.content || "";
+                            if (content) {
+                                controller.enqueue(new TextEncoder().encode(content));
+                            }
                         }
+                    } catch (streamErr) {
+                        console.error("Stream iterate error:", streamErr);
+                    } finally {
+                        controller.close();
                     }
-                    controller.close();
                 }
             });
 
@@ -130,11 +167,6 @@ export const handler = stream(async (event) => {
                 headers: { "Content-Type": "text/event-stream", ...corsHeaders }
             });
         } else {
-            const completion = await groq.chat.completions.create({
-                messages: messages as any,
-                model: modelName,
-                temperature: 0.7,
-            });
             return new Response(JSON.stringify({ text: completion.choices[0]?.message?.content || "No response" }), {
                 headers: { "Content-Type": "application/json", ...corsHeaders }
             });
